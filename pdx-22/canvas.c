@@ -15,6 +15,9 @@ static void Canvas_MouseToCell(Canvas *canvas, int mx, int my, int *cx, int *cy)
 
     *cx = localX / step;
     *cy = localY / step;
+
+    if(localX < 0) (*cx)--;
+    if(localY < 0) (*cy)--;
 }
 
 Canvas *Canvas_New(
@@ -28,104 +31,104 @@ Canvas *Canvas_New(
     int pixelSize,
     int frame) {
 
-    int i;
+	int i;
+
     Canvas *canvas = malloc(sizeof(*canvas));
-    if(canvas) {
-        canvas->palette = palette;
-        canvas->w = w;
-        canvas->h = h;
-        canvas->nframe = nframe;
-        canvas->transparent = transparent;
-        canvas->pixels = calloc(w * h * nframe, sizeof(*canvas->pixels));
-        for(i = 0; i < w * h * nframe; i++) canvas->pixels[i] = color;
-        canvas->pixelSize = pixelSize;
-        canvas->x = x;
-        canvas->y = y;
-        canvas->frame = frame;
-        canvas->gridColor = gridColor;
-        canvas->gridShow = gridShow;
+    if(!canvas) return NULL;
+
+    canvas->palette = palette;
+    canvas->w = w;
+    canvas->h = h;
+    canvas->nframe = nframe;
+    canvas->transparent = transparent;
+    canvas->pixels = calloc(w * h * nframe, sizeof(*canvas->pixels));
+    if(!canvas->pixels) {
+        free(canvas);
+        return NULL;
     }
+
+    for(i = 0; i < w * h * nframe; i++) canvas->pixels[i] = color;
+
+    canvas->pixelSize = pixelSize;
+    canvas->x = x;
+    canvas->y = y;
+    canvas->frame = frame;
+    canvas->gridColor = gridColor;
+    canvas->gridShow = gridShow;
+
     return canvas;
 }
 
-void Canvas_EventHandle(Canvas *canvas,SDL_Event event) {
+void Canvas_EventHandle(Canvas *canvas, SDL_Event event) {
+    static bool isDrawing = false;
+    static int dx = 0, dy = 0;
+    int cx = 0, cy = 0;
 
-	static bool isDrawing = false;
-	static int dx=0, dy=0;
-	int cx=0, cy=0;
-
-	switch(event.type) {
-	case SDL_KEYDOWN:
-		switch(event.key.keysym.sym) {
-		case SDLK_g:
+    switch(event.type) {
+    case SDL_KEYDOWN:
+    	switch(event.key.keysym.sym) {
+			case SDLK_g:
 			canvas->gridShow = !canvas->gridShow;
-			break;	
-		default: break;
+			break;
+			default: break;			
 		}
 		break;
-	case SDL_MOUSEBUTTONDOWN:
-		if(!isDrawing) {
-		    if (event.button.button == SDL_BUTTON_LEFT) {
-		        if(canvas->palette && inrect(event.button.x, event.button.y, canvas->palette->x, canvas->palette->y, canvas->palette->w, canvas->palette->h)) {
-		            break;
-		        }
+    case SDL_MOUSEBUTTONDOWN:
+        if(!isDrawing && event.button.button == SDL_BUTTON_LEFT) {
+            if(canvas->palette && inrect(event.button.x, event.button.y,
+                                         canvas->palette->x, canvas->palette->y,
+                                         canvas->palette->w, canvas->palette->h)) {
+                break;
+            }
 
-		        Canvas_MouseToCell(canvas, event.button.x, event.button.y, &cx, &cy);
-		        if(cx >= 0 && cx < canvas->w && cy >= 0 && cy < canvas->h) {
-		            isDrawing = true;
-		            dx = cx;
-		            dy = cy;
-		        }
-		    }
-		}
-    break;
-	case SDL_MOUSEBUTTONUP:
-		isDrawing = false;
-		break;
-	case SDL_MOUSEMOTION:
-		if(isDrawing) {
-			Canvas_MouseToCell(canvas, event.motion.x, event.motion.y, &cx, &cy);
-			if(cx >= 0 && cx < canvas->w && cy >= 0 && cy < canvas->h) {
-				Canvas_DrawLine(canvas, dx, dy, cx, cy, canvas->palette->currentColor);
-				dx=cx;
-				dy=cy;
-			}	
-		}
-		break;
+            Canvas_MouseToCell(canvas, event.button.x, event.button.y, &cx, &cy);
+            if(cx >= 0 && cx < canvas->w && cy >= 0 && cy < canvas->h) {
+                isDrawing = true;
+                dx = cx;
+                dy = cy;
+            }
+        }
+        break;
+
+    case SDL_MOUSEBUTTONUP:
+        isDrawing = false;
+        break;
+
+    case SDL_MOUSEMOTION:
+        if(isDrawing) {
+            Canvas_MouseToCell(canvas, event.motion.x, event.motion.y, &cx, &cy);
+            if(cx >= 0 && cx < canvas->w && cy >= 0 && cy < canvas->h) {
+                Canvas_DrawLine(canvas, dx, dy, cx, cy, canvas->palette->currentColor);
+                dx = cx;
+                dy = cy;
+            }
+        }
+        break;
 	case SDL_MOUSEWHEEL:
-		int xScroll = event.wheel.x; 
-		int yScroll = event.wheel.y; 
-		
-		isDrawing=false;
-		
-		if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-			xScroll *= -1;
-			yScroll *= -1;
+		if(event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+		    if(event.wheel.y > 0) event.wheel.y *= -1;
 		}
-		
-		if(canvas->pixelSize>1 && yScroll<0) {
-			canvas->pixelSize-=1;
-			yScroll=0;
-		}
-		
-		if(canvas->pixelSize<32 && yScroll>0) {
-			canvas->pixelSize+=1;
-			yScroll=0;
-		}
-		
-		break;
-	default: break;
-	}
+		if(canvas->pixelSize > 1 && event.wheel.y < 0) { 
+			canvas->pixelSize--; 
+		} 
+		if(canvas->pixelSize < 32 && event.wheel.y > 0) { 
+			canvas->pixelSize++;
+		}				
+		break;                
+    default: 
+    	break;
+    }
 }
 
 void Canvas_Draw(Canvas *canvas, SDL_Renderer *renderer, SDL_Rect viewport) {
 
-	int i,j,k;
-	byte l;
+	int i,j;
 
     int px = canvas->pixelSize;
     int step = canvas->gridShow ? px + 1 : px;
+    if(step <= 0) return;
 
+    int base = canvas->frame * canvas->w * canvas->h;
     int x0 = (-canvas->x) / step;
     int y0 = (-canvas->y) / step;
     int x1 = (-canvas->x + viewport.w) / step + 1;
@@ -140,21 +143,19 @@ void Canvas_Draw(Canvas *canvas, SDL_Renderer *renderer, SDL_Rect viewport) {
 
     SDL_Rect rect;
     for(j = y0; j < y1; j++) {
+        int row = base + j * canvas->w;
+        rect.y = canvas->y + j * step + (canvas->gridShow ? 1 : 0);
+        rect.h = px;
+
         for(i = x0; i < x1; i++) {
-            k = canvas->frame * canvas->w * canvas->h + j * canvas->w + i;
-            l = canvas->pixels[k];
+            byte l = canvas->pixels[row + i];
             if(l == canvas->transparent) continue;
 
             rect.x = canvas->x + i * step + (canvas->gridShow ? 1 : 0);
-            rect.y = canvas->y + j * step + (canvas->gridShow ? 1 : 0);
             rect.w = px;
-            rect.h = px;
 
-            SDL_SetRenderDrawColor(renderer,
-                canvas->palette->colors[l].r,
-                canvas->palette->colors[l].g,
-                canvas->palette->colors[l].b,
-                255);
+            SDL_Color c = canvas->palette->colors[l];
+            SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
             SDL_RenderFillRect(renderer, &rect);
         }
     }
@@ -181,20 +182,13 @@ void Canvas_DrawLine(Canvas *canvas, int x0, int y0, int x1, int y1, byte color)
     int dy = -abs(y1 - y0);
     int sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
-    int e2;
 
-    while (true) {
+    while(true) {
         Canvas_DrawPoint(canvas, x0, y0, color);
-        if (x0 == x1 && y0 == y1) break;
-        e2 = 2 * err;
-        if (e2 >= dy) {
-            err += dy;
-            x0 += sx;
-        }
-        if (e2 <= dx) {
-            err += dx;
-            y0 += sy;
-        }
+        if(x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if(e2 >= dy) { err += dy; x0 += sx; }
+        if(e2 <= dx) { err += dx; y0 += sy; }
     }
 }
 
