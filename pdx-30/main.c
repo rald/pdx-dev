@@ -197,9 +197,9 @@ int main(int argc,char *argv[]) {
 					canvas->pixelSize--; 
 				} 
 				if(canvas->pixelSize < 32 && event.wheel.y > 0) { 
-					canvas->pixelSize++; 
+					canvas->pixelSize++;
 				}				
-				break;
+				break;                
 	        default: 
 	        	break;
             }
