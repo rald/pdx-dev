@@ -220,7 +220,7 @@ int main(int argc,char *argv[]) {
 						target->cellY=cy;
 					}
 					break;
-				case SDLK_a:
+				case SDLK_i:
 					if(event.key.keysym.mod & KMOD_SHIFT) {
 						Canvas_AddFrameAfter(canvas);
 					} else {
