@@ -1,0 +1,3 @@
+#!/bin/sh
+cat Makefile *.c *.h > x
+
