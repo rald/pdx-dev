@@ -1,0 +1,39 @@
+/* file: mouse.c */
+
+#include <stdlib.h>
+#include "mouse.h"
+
+Mouse *Mouse_New(char *filename, int x, int y, SDL_Color transparent, int hotSpotX,int hotSpotY) {
+	Mouse *mouse = malloc(sizeof(*mouse));
+	SDL_Surface *surface = NULL;
+
+	if(mouse) {
+		mouse->x = x;
+		mouse->y = y;
+		mouse->state = 0;
+		mouse->cursor = NULL;
+
+		surface = SDL_LoadBMP(filename);
+		if(surface) {
+			SDL_SetColorKey(surface, SDL_TRUE, SDL_MapRGB(surface->format, transparent.r, transparent.g, transparent.b));
+			mouse->cursor = SDL_CreateColorCursor(surface, hotSpotX, hotSpotY);
+			SDL_FreeSurface(surface);
+		}
+	}
+
+	return mouse;
+}
+
+void Mouse_Free(Mouse *mouse) {
+	SDL_FreeCursor(mouse->cursor);
+	free(mouse);
+}
+
+void Mouse_EventHandle(Mouse *mouse, SDL_Event event) {
+	(void)mouse;
+	(void)event;
+}
+
+void Mouse_Update(Mouse *mouse) {
+	mouse->state = SDL_GetMouseState(&mouse->x, &mouse->y);
+}
